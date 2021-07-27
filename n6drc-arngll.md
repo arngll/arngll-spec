@@ -146,7 +146,7 @@ TBD
 
 TBD
 
-### 2.1.1. MTU ####
+### MTU ####
 
 The maximum transmissible unit is defined by the PHY layer in use and
 the options. It is RECOMMENDED to use a PHY layer with an MTU no
@@ -159,7 +159,7 @@ different than the default MTU and smaller than the physical MTU limit
 imposed by the PHY, the MTU value from the network beacon payload
 SHOULD be used instead.
 
-## 2.2. Broadcast and Multicast ###
+## Broadcast and Multicast ###
 
 Since we use HAM-64 addresses as our link-layer addresses, we use the
 broadcast/multicast scheme that is defined for ham addresses.
@@ -196,7 +196,7 @@ Octets: |      2      |    0/2    | 2/4/6/8  |  2/4/6/8 |      0/5/6     |      
 Fields: | FRAME_CNTRL | *[NETID]* | DST_ADDR | SRC_ADDR | *[SEC_HEADER]* | *[MAC_PAYLOAD]* | *[SEC_MIC]* | FCS
 
 
-## 3.1. Frame Control Field
+## Frame Control Field
 
      0                   1
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
@@ -246,26 +246,26 @@ dependent on the packet type:
 Note that, in the later case, any non-data packet that is sent as a
 response to request MUST include the NETID field.
 
-## 3.3. Destination Address Field
+## Destination Address Field
 
 TBD
 
-## 3.4. Source Address Field
+## Source Address Field
 
 TBD
 
-## 3.5. Security Header Field
+## Security Header Field
 
 The security header field is present when security was enabled for the
 sender of the packet. The exact details of this field are outlined in
 [section 6.1](#61-security-header).
 
 
-## 3.6. Frame Payload Field
+## Frame Payload Field
 
 TBD
 
-## 3.7. FCS Field
+## FCS Field
 
 The FCS is a 16-bit big-endian value that is calculated over all of
 the preceding bytes[^1] using the following CRC polynomial:
@@ -287,7 +287,7 @@ There are different types of frames:
 3.  Acknowledgement Frames
 4.  MAC Command Frames
 
-## 4.1. Beacon Frame Format
+## Beacon Frame Format
 
 The first part of the beacon frame format is the network protocol
 identifier. This value is a variable-length integer that can be
@@ -312,14 +312,17 @@ followed by the nonce is appended to the end of the beacon payload.
 This allows devices to securely learn the current security frame
 counter from their peers.
 
+### Protocol Numbers
+
 The following protocol numbers are defined:
 
  No. | Name           | Reference
 ----:|----------------|------------------
    0 | *RESERVED*     | —
    1 | Multi-Protocol | TBD
-   4 | IPv4           | RFC791
-   6 | 6LoWPAN        | RFC6282, RFC6775
+   4 | IPv4/ARP       | RFC791
+   5 | IPv6           | RFC8200
+   6 | AR-6LoWPAN     | RFC4944, RFC6282, RFC6775
 
 ### Beacon Frame Payload Format
 
@@ -337,14 +340,17 @@ The following field types are defined to be used across all protocols:
    0 | *RESERVED*    |        |        |
    2 | Network-Name  | string | 0-16   | (Empty)
    4 | PHY-MTU       | uint   | 0-2    | (PHY specific)
+   6 | TSA           | uint   | 0-2    | 000
 
  *  **Network-Name**: A human-readable, UTF8-encoded string
     describing the network. 0 to 16 bytes. Default value is empty.
  *  **PHY-MTU**: Maximum Transmissible Unit for Physical Layer. MUST
     be no less than 127. If not present, assume it is whatever the
     defined default value is for the PHY layer that is in use.
+ *  **TSA**: Temporary Short Address of the sender, as defined in
+    section 4.3.2 of ARNCE. 
 
-For IPv6-based protocols, the following fields are defined (with all
+For 6LoWPAN-based protocols, the following fields are defined (with all
 other fields being unallocated/reserved):
 
  No. | Name          | Format | Length | Default
@@ -354,11 +360,55 @@ other fields being unallocated/reserved):
  *  **IPv6 MTU**: Effective Maximum Transmissible Unit for IPv6
     packets. MUST be no less than 1280. If not present, assume 1280.
 
-## 4.2. Data Frame Format
+## Data Frame Format
+
+The format of the data payload is dependent on the protocol being used
+for the network, as described by the beacon protocol.
+
+### Protocol 1: Multi-Protocol
+
+Protocol 1 networks can multiplex different protocols onto the same
+network, identified by the first few bytes of the frame. It is encoded
+using the same mechanism used for beacon responses. For protocol
+numbers 0-127, it is simply the first byte of the data frame. The rest
+of the bytes in the data frame are interpreted according to the protocol
+type.
+
+### Protocol 4: IPv4/ARP
+
+Protocol 4 networks are IPv4-only, with the data field containing the
+either a raw IPv4 packet or a raw ARP packet. IPv6 packets are
+differentiated from ARP packets by examining the most-signifiant nibble
+of the first data byte: IPv4 packets will be 0x4, whereas ARP packets
+will be 0x0.
+
+#### ARP Details
+
+* HTYPE: TBD, See https://www.iana.org/assignments/arp-parameters/arp-parameters.xhtml
+* PTYPE: 0x0800
+* HLEN: 8
+* PLEN: 4 
+
+### Protocol 5: IPv6
+
+Protocol 5 networks are IPv6-only, using no header compression. As such,
+it is not well optimized for bandwidth-limited connections and is
+specified here for experimental purposes only.
+
+### Protocol 6: AR-6LoWPAN
+
+Protocol 5 networks are IPv6-only, but encode the packets using a flavor
+of 6LoWPAN optimized for ARNGLL we call AR-6LoWPAN. It has the following
+differences:
+
+ * 64-bit ARNCE/HAM-64 addresses are used instead of EUI-64 "long addresses"
+   from 802.15.4.
+ * 12-bit ARNCE TSAs are used instead of 16-bit "short addresses"
+   from 802.15.4.
 
 TBD
 
-## 4.3. Acknowledgement Frame Format
+## Acknowledgement Frame Format
 
 ACK packets are sent in response to unicast packets which have the ACK
 bit set. It is intended to be used to implement a MAC-level automatic
