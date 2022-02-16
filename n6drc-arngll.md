@@ -72,9 +72,11 @@ bandwidth on things that aren't strictly necessary, like ASCII
 encoding of callsigns. It also imposes some unfortunate arbitrary
 limitations, such as a maximum callsign length of six characters.
 
-I am proposing a new link layer which should be better optimized for
-low-bandwidth links and, thus, be in a better position for using with
-6LoWPAN. It works well with callsigns up to 12 characters long.
+This document outlines a new link layer intended to be better optimized for
+low-bandwidth links and, thus, be in a better position for being used
+with 6LoWPAN. It works well with callsigns up to 12 characters long.
+It is also flexible enough to be used with non-IP-based protocols,
+such as text messaging and simplex voice.
 
 The following link-layer is *loosely* inspired by the 802.15.4 MAC
 layer. In particular, the following concepts from 802.15.4 have been
@@ -88,10 +90,11 @@ influential:
 
 Significant differences include:
 
- *  Addresses are based on [ham
-    addresses](https://github.com/arngll/arnce-spec)([html](https://rawgit.com/arngll/arnce-spec/master/n6drc-arnce.html)),
+ *  Addresses are based on [ham addresses](https://github.com/arngll/arnce-spec)
+    ([html](https://rawgit.com/arngll/arnce-spec/master/n6drc-arnce.html)),
     which encode the callsign.
- *  There are no 802.15.4-style short-addresses.
+ *  802.15.4-style short-addresses are replaced by temporary addresses
+    defined in ARNCE/HAM-64.
  *  All addresses are effectively 64-bits when expanded, but may be
     compressed by omitting the trailing 16-bit chunks that would
     otherwise be zero-filled.
@@ -117,20 +120,28 @@ radio-controlled aircraft, the authors strongly encourage the use of
 an authentication-only mode that omits the actual encryption of the
 message contents.
 
-## Features #
+## Features ##
 
 TBD
 
-## Concepts and Terminology #
+## Concepts and Terminology ##
 
 TBD
+
+## Modes of Operation ##
+
+### Point-to-Point ###
+
+### Analog Repeaters ###
+
+### Digital Repeaters ###
 
 ## Future Direction ##
 
 In the long term, the following features may be desirable:
 
  *  Beacon-enabled endpoints, where devices only send their outbound
-    data traffic when polled via a beacon.
+    data traffic when polled.
  *  Coordinator Realignment, allowing the coordinator to change the
     channel and/or NETID
  *  Time-synchronization
@@ -144,13 +155,13 @@ TBD
 
 ## Physical Layer Considerations ###
 
-TBD
+TBD, but initially targeting the standard Bell 202 packet format used by AX.25.
 
 ### MTU ####
 
 The maximum transmissible unit is defined by the PHY layer in use and
 the options. It is RECOMMENDED to use a PHY layer with an MTU no
-shorter than 256 octets. In any case, the MTU of the PHY MUST be no
+shorter than around 256 octets. In any case, the MTU of the PHY MUST be no
 smaller than 127 octets. A PHY MTU larger than 256 is allowed and may
 improve performance.
 
@@ -161,64 +172,72 @@ SHOULD be used instead.
 
 ## Broadcast and Multicast ###
 
-Since we use HAM-64 addresses as our link-layer addresses, we use the
-broadcast/multicast scheme that is defined for ham addresses.
-Specifically:
+The ARNCE/HAM-64 specification outlines broadcast and multicast addresses:
 
- *  `FFFF:0000:0000:0000` - Broadcast Address
- *  `FAxx:xxxx:xxxx:xxxx` - IPv6 Multicast Address Range
- *  `FBxx:xxxx:0000:0000` - IPv4 Multicast Address Range
+ *  `FFFF-0000-0000-0000` - Broadcast Address
+ *  `FAxx-xxxx-xxxx-xxxx` - IPv6 Multicast Address Range
+ *  `FBxx-xxxx-0000-0000` - IPv4 Multicast Address Range
 
-For converting IPv6 multicast addresses into link-local multicast
-addresses, you actually store the lower 13 octets of the multicast
+To converting IPv6 multicast addresses into link-local multicast
+addresses, you store the lower 13 octets of the multicast
 group-id *in reverse order*. This takes advantage of the fact that
 IPv6 multicast addresses tend to be zero-filled. For example, a
 destination multicast of `ff02::2` would simply be the abbreviated ham
 address `FA02`.
 
-See the HAM-64 address specification for more detailed information.
+See the ARNCE/HAM-64 address specification for more detailed information.
 
-
-# General Frame Format
+# General Frame Format #
 
 Endpoints use a special 64-bit encoding of the callsign as link-layer
 addresses, as defined
-[here](https://github.com/arngll/arnce-spec/blob/master/ham-addr.txt.md).
+[in HAM-64](https://github.com/arngll/arnce-spec/blob/master/ham-addr.txt.md).
 These addresses are often zero-padded, and thus can often be stored in
 a shorter form using as few as 16-bits.
 
 A link layer packet is arranged like this:
 
-    PACKET = FRAME_CNTRL [NETID] DEST_ADDR SRC_ADDR [SEC_HEADER] [MAC_PAYLOAD] [SEC_MIC] FCS
-
-Octets: |      2      |    0/2    | 2/4/6/8  |  2/4/6/8 |      0/5/6     |        n        |   0/4/8/16  |  2
---------|-------------|-----------|----------|----------|----------------|-----------------|-------------|----
-Fields: | FRAME_CNTRL | *[NETID]* | DST_ADDR | SRC_ADDR | *[SEC_HEADER]* | *[MAC_PAYLOAD]* | *[SEC_MIC]* | FCS
+Field        | Description            | Req. |  Octets
+-------------|------------------------|------|------------
+`FCF`        | Frame Control Field    | *    | 2
+`NETID`      | Network ID             |      | 0/2
+`DSTADDR`    | Destination Address    | *    | 2/4/6/8
+`SRCADDR`    | Source Address         | *    | 2/4/6/8
+`RLYADDR`    | Relay Address          |      | 0/2/4/6/8
+`SECINFO`    | Security Header        |      | 0/5/6
+`PAYLOAD`    | Payload                |      | n
+`MIC`        | Message Integrity Code |      | 0/4/8/12/16
+`FCS`        | Final Checksum         | *    | 2
 
 
 ## Frame Control Field
 
-     0                   1
-     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |VER| T |DST|SRC|S|N|A|0|RESERVE|
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |      MSB      |      LSB      |
+      0                                       1
+      0   1   2   3   4   5   6   7   8   9   0   1   2   3   4   5
+    +---+---+---+---+---+---+---+---|---+---+---+---+---+---+---+---+
+    |  VER  |   T   | DSTLN | SRCLN | S | N | A | R | D |   | RLYLN |
+    +---+---+---+---+---+---+---+---|---+---+---+---+---+---+---+---+
+    :              MSB              :              LSB              :
 
-Most Significant (First) Byte (MSB First):
+Most Significant (First) Byte:
 
  *  `VER`: Version (`0x0` is experimental, `0x1` is to-spec)
- *  `T`: Packet Type
+ *  `T`: Frame Type
      *  `0` - Beacon
      *  `1` - Data
      *  `2` - Ack
      *  `3` - MAC Command
- *  `DST`: 2 Bits - Destination Address Info
+ *  `DSTLN`: 2 Bits - Destination Address Length
      *  `0` - 16-bit length
      *  `1` - 32-bit length
      *  `2` - 48-bit length
      *  `3` - 64-bit length
- *  `SRC`: 2 Bits - Source Address Info
+ *  `SRCLN`: 2 Bits - Source Address Length
+     *  `0` - 16-bit length
+     *  `1` - 32-bit length
+     *  `2` - 48-bit length
+     *  `3` - 64-bit length
+ *  `RLYLN`: 2 Bits - Repeater Address Length
      *  `0` - 16-bit length
      *  `1` - 32-bit length
      *  `2` - 48-bit length
@@ -227,14 +246,16 @@ Most Significant (First) Byte (MSB First):
 Least Significant (Second) Byte:
 
  *  `S`: Security Header Included Flag
- *  `N`: Area Network ID Present
+ *  `N`: `NETID` Present
  *  `A`: Ack Requested
+ *  `R`: Relay Address Present.
+ *  `D`: Direction. True if the packet is being sent by the named relay station.
  *  All other bits are *RESERVED* (ignored upon receipt and set to
     zero on transmit)
 
-## Network Identifier Field
+## NETID: Network Identifier Field
 
-The NETID field is optional. When not present, the meaning is
+The `NETID` field is optional. When absent, the meaning is
 dependent on the packet type:
 
  *  In data packets (or in any type of secured packet), the NETID MAY
@@ -246,26 +267,68 @@ dependent on the packet type:
 Note that, in the later case, any non-data packet that is sent as a
 response to request MUST include the NETID field.
 
-## Destination Address Field
+## DSTADDR: Destination Address Field
 
-TBD
+The destination address field is a HAM-64 address, and may be any of the following:
 
-## Source Address Field
+* Encoded callsign
+* Special address (broadcast, multicast, etc)
+* Temporary address (0x1-0x0639), if supported by the coordinator
 
-TBD
+The destination address MUST NOT be set to the "empty" address (0x0000).
 
-## Security Header Field
+All tailing chunks with the value 0x0000 SHOULD be omitted and the `DSTLN` field
+of the Frame Control Field set accordingly.
 
-The security header field is present when security was enabled for the
-sender of the packet. The exact details of this field are outlined in
-[section 6.1](#61-security-header).
+## SRCADDR: Source Address Field
 
+The source address field is a HAM-64 address, and may any of the following:
 
-## Frame Payload Field
+* Encoded callsign
+* Temporary address (0x1-0x0639), if supported by the coordinator
 
-TBD
+The destination address MUST NOT be set to the "empty" address (0x0000),
+the broadcast address, or any multicast address.
 
-## FCS Field
+All tailing chunks with the value 0x0000 SHOULD be omitted and the `SRCLN` field
+of the Frame Control Field set accordingly.
+
+## RLYADDR: Relay Address Field
+
+The relay address field is a HAM-64 address, and may any of the following:
+
+* Encoded callsign
+* Temporary address (0x1-0x0639), if supported by the coordinator
+
+This field is used to identify a specific relay station that will be used
+to relay the frame. This field is only present if the `R` flag is set.
+If present, the `D` flag is used to differentiate between packets
+that are being sent to the relay versus packets that have been relayed.
+This field is only used when a packet is being relayed.
+
+The relay address MUST NOT be set to the "empty" address (0x0000),
+the broadcast address, or any multicast address.
+
+All tailing chunks with the value 0x0000 SHOULD be omitted and the `RLYLN` field
+of the Frame Control Field set accordingly.
+
+## SECINFO: Security Header Field
+
+The security header field is present when security is enabled by the
+sender of the packet (bit `S` from the FCF). The exact details of
+this field are outlined in [section 6.1](#security-header).
+
+## PAYLOAD: Frame Payload Field
+
+The content of the payload is defined by the frame type. See the
+frame types section for more information.
+
+## MIC: Message Integrity Code
+
+The MIC establishes the cryptographic authenticity of the frame.
+If present, can be 4, 8, or 16 bytes in length.
+
+## FCS: Final Checksum Field
 
 The FCS is a 16-bit big-endian value that is calculated over all of
 the preceding bytes[^1] using the following CRC polynomial:
@@ -275,19 +338,27 @@ the preceding bytes[^1] using the following CRC polynomial:
 This CRC is also known as [CRC-16/CCITT-FALSE][FCS]. It is the same CRC
 algorithm used for 802.15.4.
 
+TODO: Consider using HDLC CRC for compatability with existing TNCs?
+
 [FCS]: http://reveng.sourceforge.net/crc-catalogue/16.htm#crc.cat.crc-16-ccitt-false
 [^1]: [ACK packets](#ack-packets) are an exception to this behavior, see below
 
 # Frame Types
 
-There are different types of frames:
+There are four different types of frames:
 
 1.  Beacon Frames
 2.  Data Frames
 3.  Acknowledgement Frames
 4.  MAC Command Frames
 
-## Beacon Frame Format
+## Beacon Frames
+
+Beacons are used to announce or confirm the existance of a station,
+as well as exchange other information such as network association
+information (Like NETID) and higher-level protocol details (like MTU).
+Strictly speaking, the payload of a beacon frame is optional. However,
+the format of the payload, if present, is defined below.
 
 The first part of the beacon frame format is the network protocol
 identifier. This value is a variable-length integer that can be
@@ -298,13 +369,12 @@ allows values from 0 to 127 to be represented directly as a single
 byte, values 128 to 16383 with two bytes, and values 16,384 to
 2,097,151 with three bytes.
 
-Encodings of unsigned integer values larger than three bytes, is
-explicitly prohibited and MUST NOT be used.
+Encodings of unsigned integer values larger than three bytes MUST
+NOT be used. If encountered, the frame MUST be dropped.
 
-Any additional data appended to the MAC payload in a beacon is defined
-to be the *Beacon Payload*, the contents of which are defined by the
-protocol indicated in the preceding protocol identifier. However,
-there is a general convention which is described below.
+Any additional data appended to the payload in a beacon is defined
+to be the *Beacon Parameters*, the format of which is described
+in a section below.
 
 A *Beacon Request* can include a *nonce*. If the beacon is sent in
 response to a beacon request that includes a nonce, the a value `0x00`
@@ -316,17 +386,20 @@ counter from their peers.
 
 The following protocol numbers are defined:
 
- No. | Name           | Reference
-----:|----------------|------------------
-   0 | *RESERVED*     | —
-   1 | Multi-Protocol | TBD
-   4 | IPv4/ARP       | RFC791
-   5 | IPv6           | RFC8200
-   6 | AR-6LoWPAN     | RFC4944, RFC6282, RFC6775
+ No. | Name               | Reference
+----:|--------------------|------------------
+   0 | *RESERVED*         | —
+   1 | Multi-Protocol     | TBD
+   4 | IPv4/ARP           | RFC791
+   5 | IPv6               | RFC8200
+   6 | AR-6LoWPAN         | RFC4944, RFC6282, RFC6775
+  90 | Experimental Text  | TBD
+  91 | Experimental Voice | TBD
+  92 | Experimental AX.25 | TBD
 
-### Beacon Frame Payload Format
+### Beacon Parameters Format
 
-The beacon payload is encoded using the same general mechanism that is
+The beacon parameters are encoded using the same general mechanism that is
 used to encode CoAP options (as defined in [RFC7252 section
 3\.1](https://tools.ietf.org/html/rfc7252#section-3.1)), but with
 different type associations. All fields are optional. Even-numbered
@@ -360,7 +433,10 @@ other fields being unallocated/reserved):
  *  **IPv6 MTU**: Effective Maximum Transmissible Unit for IPv6
     packets. MUST be no less than 1280. If not present, assume 1280.
 
-## Data Frame Format
+## Data Frames
+
+Data frames are the mechanism for transmitting the packets for
+higher-level protocols, like IPv4 and IPv6.
 
 The format of the data payload is dependent on the protocol being used
 for the network, as described by the beacon protocol.
@@ -377,7 +453,7 @@ type.
 ### Protocol 4: IPv4/ARP
 
 Protocol 4 networks are IPv4-only, with the data field containing the
-either a raw IPv4 packet or a raw ARP packet. IPv6 packets are
+either a raw IPv4 packet or a raw ARP packet. IPv4 packets are
 differentiated from ARP packets by examining the most-signifiant nibble
 of the first data byte: IPv4 packets will be 0x4, whereas ARP packets
 will be 0x0.
@@ -408,46 +484,49 @@ differences:
 
 TBD
 
-## Acknowledgement Frame Format
+## Acknowledgement Frames
 
-ACK packets are sent in response to unicast packets which have the ACK
-bit set. It is intended to be used to implement a MAC-level automatic
+ACK packets are sent immediately in response to unicast packets which have the ACK
+bit set. It is used to implement a MAC-level automatic
 retry mechanism. Thus it is *critical* that if a packet is received
 with the ACK bit set that an ACK packet be sent in response as quickly
 as physically possible, so as to avoid causing the sender to retry.
+Exact timing requirements are TBD.
 
 Acknowledgement packets are special in that they have a simplified
 frame structure and DO NOT follow the general structure adhered to by
 all other types of frames. Fundamentally, an ACK packet contains only
 two pieces of information: The address of the sender of the
-acknowledgement and the FCS of the *original packet which is being
-acknowledged*. It is structured as follows:
+acknowledgement, checksum of the *original packet which is being
+acknowledged*, and a final checksum.
 
-    PACKET = FRAME_CNTRL_MSB  SRC_ADDR  FCS_OF_ACKED_PACKET
+A acknowlegement frame is arranged like this:
 
-Or, more visually:
-
-    |FRAME_CNTRL_MSB|
-    +-+-+-+-+-+-+-+-+-+-~..  ..~-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |VER|1 0|0 0|SRC|   SRC_ADDR   |      FCS_OF_ACKED_PACKET      |
-    +-+-+-+-+-+-+-+-+-+-~..  ..~-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+Field        | Description                | Octets
+-------------|----------------------------|-------------
+`FCF_MSB`    | MSB of Frame Control Field | 1
+`SRCADDR`    | Source Address             | 2/4/6/8
+`ACS`        | Acknowlledgment Checksum   | 2
+`FCS`        | Final Checksum             | 2
 
 This packet is designed to be as small as possible. Thus, the second
 byte of the frame control field is omitted entirely, along with the
-destination address and NETID. The FCS is **not** calculated over the
-ACK packet, but is rather the FCS *from the packet being
-acknowledged*.
+destination address and NETID. The ACS value is calculated from the
+contents of the packet being acknowledged.
 
 For ACK packets, the destination address length flag MUST be set to
 zero. Upon receipt of an ACK packet, a value other than zero being
 present in the destination address length field MUST cause the entire
 packet to be ignored.
 
+## Command Frames
 
-## Command Frame Format
-
-MAC command packets are similar in function and purpose to the MAC
+MAC command frames are similar in function and purpose to the MAC
 command packets in 802.15.4.
+
+MAC commands generally follow a command-response pattern: A command
+is received, and a response is sent. Thus, MAC command usually SHOULD
+NOT have the acknowledgement request bit set.
 
 The payload format for a MAC command is:
 
@@ -457,7 +536,7 @@ The payload format for a MAC command is:
     |  MAC Command  | MAC Command Specific Payload
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-~..
 
-# Command Frames
+The following commands have been defined:
 
  No. | Name
 ----:|----------------
@@ -466,7 +545,7 @@ The payload format for a MAC command is:
    2 | Signal Report Request
    3 | Signal Report Response
 
-## Beacon Request Command
+### Beacon Request Command
 
 Beacon requests are used for a variety of purposes:
 
@@ -479,10 +558,11 @@ assumed to be a nonce. Beacons sent in response to a beacon request
 that includes a nonce MUST include the nonce at the end of the beacon
 payload, preceded by a zero byte.
 
-The nonce, if present in the request, may be 1 to 8 bytes long.
+The nonce, if present in the request, MUST NOT be longer than 8 bytes
+long. Such requests SHOULD be ignored by the receiving station.
 
 To improve the performance of networks which use authentication, the
-responding node MAY omit the network information (including the NETID)
+responding station MAY omit the NETID and beacon parameters (including the NETID)
 from the beacon response if ALL of the following criteria are met:
 
  *  A nonce is present in the beacon request
@@ -493,14 +573,16 @@ multicast/broadcast beacon request must use a random back-off delay
 (between 0 and `MAX_MCAST_RESPONSE_BACKOFF` seconds) before sending
 the beacon response. If supported by the PHY layer in use, the use of
 a clear channel assessment (CCA) feature is highly RECOMMENDED.
-Unicast beacon requests should responded to as quickly as physically
-possible.
+
+
+Unicast beacon requests should be responded to as quickly as physically
+possible. Exact timing requirements are TBD.
 
  *  `MAX_MCAST_RESPONSE_BACKOFF`: 0.1 seconds
 
-# Signal Report Commands
+### Signal Report Commands
 
-The signal report request/response mechanism allows a node to
+The signal report request/response mechanism allows a station to
 determine the link quality metrics at the MAC layer between nodes.
 
 Responding to a signal report request is OPTIONAL and MAY be ignored
@@ -554,46 +636,50 @@ layer in 802.15.4. If you are familiar with the security layer in
 802\.15.4, you will find this section to be somewhat similar, but with
 a few key differences:
 
-1.  Uses *AES-OCB* mode instead of *AES-CCM*\*, since AES-OCB mode is
+1.  Uses *AES-OCB* mode instead of *AES-CCM\**, since AES-OCB mode is
     more efficient than AES-CCM\*, and the patents which cover AES-OCB
     are free to use for amateur radio purposes.
 2.  There is no mechanism for specifying an encryption mode which
     doesn't include authentication. (Authentication without encryption
     *is* supported)
 
-## 6.1. Security Header
+## Security Header
 
-The security header (`SEC_HEADER`) is defined as:
+The security header (`SECINFO`) is defined as:
 
-Octets: |      1      |        4        |     0/1
---------|-------------|-----------------|-------------
-Fields: | `SEC_CNTRL` | `FRAME_COUNTER` | `KEY_INDEX`
+Field        | Description                | Octets
+-------------|----------------------------|-------------
+`SCF`        | Security Control Field     | 1
+`FCNT`       | Frame Counter              | 4
+`KID`        | Key Index                  | 0/1
 
-Where `SEC_CNTRL` is defined as:
+Where `SCF` is defined as:
 
-     0
-     0 1 2 3 4 5 6 7
-    +-+-+-+-+-+-+-+-+
-    |E|MIC|KIM|RSRVD|
-    +-+-+-+-+-+-+-+-+
+      0
+      0   1   2   3   4   5   6   7
+    +---+---+---+---+---+---+---+---+
+    | E | MICLN |  KIM  |  RESERVED |
+    +---+---+---+---+---+---+---+---+
 
  *  `E`: Payload Encrypted Flag. Set if the payload is encrypted.
- *  `MIC`: Length of the Message Integrity Check code, measured in
+ *  `MICLN`: Length of the Message Integrity Check code, measured in
     4-octet chunks.
      *  `0x0`: 32-bit MIC
      *  `0x1`: 64-bit MIC
      *  `0x2`: 96-bit MIC
      *  `0x3`: 128-bit MIC
  *  `KIM`: Key Identifier Mode
-     *  `0x0`: Key is identified by `SRC_ADDR` and `DST_ADDR` (No
-        `KEY_INDEX` field is present)
-     *  `0x1`: Key is identified by key index.
+     *  `0x0`: Key is identified by...
+	     * R=0: `SRCADDR` and `DSTADDR`
+	     * R=1;D=0: `SRCADDR` and `RLYADDR`
+	     * R=1;D=1: `RLYADDR` and `DSTADDR`
+     *  `0x1`: Key is identified by key index (`KID`).
      *  `0x2`: Reserved. Do not set.
      *  `0x3`: Reserved. Do not set.
- *  `RSRVD`: Reserved. Always set to zero when sending, and ignore
+ *  `RESERVED`: Reserved. Always set to zero when sending, and ignore
     upon reception (if the newly defined bits were really important,
     then decryption/authentication will fail)
- *  `FRAME_COUNTER`: 32-bit integer indicating the sequential index of
+ *  `FCNTR`: 32-bit integer indicating the sequential index of
     this frame. This counter MUST be incremented monotonically for
     each packet sent. Once a value is used, it must NEVER be reused
     (unless the encryption key is changed, at which point this value
@@ -601,6 +687,8 @@ Where `SEC_CNTRL` is defined as:
     from `0xFFFFFFFF` to `0x00000000`: Upon reaching `0xFFFFFFFF`, all
     further attempts to send a packet with a security header should
     fail until the security key is changed.
+ *  `KID`: Key identifier. Defines which key to use from a pre-established
+    set of keys. Value is 0-255.
 
 For packets with a security header, the frame counter on received
 packet MUST be compared to the peer frame counter. If the frame
@@ -618,8 +706,7 @@ security is enabled.
 Devices in a security-enabled network can learn the frame counter of
 their peers by sending a beacon request command with a nonce.
 
-## 6.2. Security Operations
-
+## Security Operations
 
 ### AES-OCB Parameters
 
@@ -655,25 +742,27 @@ The nonce is defined as follows:
 
 Octets: |       8       |     1     |      4
 --------|---------------|-----------|---------------
-Fields: | FULL_SRC_ADDR | SEC_CNTRL | FRAME_COUNTER
+Fields: | FULL\_SRCADDR |    SCF    |    FCNT
 
-Where `FULL_SRC_ADDR` is `SRC_ADDR` padded with trailing zeros to 64-bits (8 bytes).
+Where `FULL_SRCADDR` is `SRCADDR` padded with trailing zeros to 64-bits (8 bytes).
 
 ### *a* data and *m* data ####
 
 When used for authentication only (i.e.: `E` is set to `0`), *a* data
 and *m* data are set to the following:
 
- *  `a` data: `FRAME_CNTRL` || `NETID` || `DEST_ADDR` || `SRC_ADDR` ||
-    `SEC_HEADER` || `MAC_PAYLOAD`
+ *  `a` data: `FCF` || `NETID` || `DSTADDR` || `SRCADDR` ||
+    `SCF` || `PAYLOAD` (Note, these fields are used as they
+	appear in the packet. If the `NETID` is omitted from the packet,
+	it should be omitted here)
  *  `m` data: *empty*
 
 When encryption is used (i.e.: `E` is set to `1`), *a* data and *m*
 data are set to the following:
 
- *  `a` data: `FRAME_CNTRL` || `NETID` || `DEST_ADDR` || `SRC_ADDR` ||
-    `SEC_HEADER`
- *  `m` data: `MAC_PAYLOAD`
+ *  `a` data: `FCF` || `NETID` || `DSTADDR` || `SRCADDR` ||
+    `SCF`
+ *  `m` data: `PAYLOAD`
 
 # Security Considerations ##
 
@@ -698,8 +787,7 @@ contributed feedback to this document.
 ## Informative References ###
 
  *  [AX.25](https://www.tapr.org/pdf/AX25.2.2.pdf)
- *  [802.15.4-2003
-    Spec](http://user.engineering.uiowa.edu/~mcover/lab4/802.15.4-2003.pdf)
+ *  [802.15.4-2003 Spec](http://user.engineering.uiowa.edu/~mcover/lab4/802.15.4-2003.pdf)
 
 {backmatter}
 
@@ -767,15 +855,16 @@ The typical packet overhead (assuming 6-character callsigns, no
 security, and no network id) of a single unicast packet is just 12
 bytes:
 
- *  `FRAME_CNTRL`: 2
- *  `DST_ADDR`: 4
- *  `SRC_ADDR`: 4
+ *  `FCF`: 2
+ *  `DSTADDR`: 4
+ *  `SRCADDR`: 4
  *  `FCS`: 2
 
 Compare this to the typical AX.25 packet overhead, which is 17
 bytes (41% larger!). Additionally, ARNGLL gracefully supports
 callsigns larger than 6 characters (up to 12), which AX.25
-quite simply cannot handle.
+quite simply cannot handle. When used with a coordinator, the
+average packet length can decrease further to 10 or even 8.
 
 Turning on security can add between 10 and 30 bytes per packet,
 depending on how the security mode is configured.
@@ -784,12 +873,12 @@ The absolute worst-case maximuim packet overhead (assuming
 12-character callsigns, security, and a non-zero network id) for a
 single unicast packet is 44 bytes:
 
- *  `FRAME_CNTRL`: 2
+ *  `FCF`: 2
  *  `NETID`: 2
- *  `DST_ADDR`: 8
- *  `SRC_ADDR`: 8
- *  `SEC_HEADER`: 6
- *  `SEC_MIC`: 16 (MIC-128)
+ *  `DSTADDR`: 8
+ *  `SRCADDR`: 8
+ *  `SECINFO`: 6
+ *  `MIC`: 16 (MIC-128)
  *  `FCS`: 2
 
 Keep in mind that this is an worst-case upper-limit. When used with
