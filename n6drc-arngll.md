@@ -126,15 +126,32 @@ TBD
 
 ## Concepts and Terminology ##
 
-TBD
+ * *TSA*: Temporary Short Address
+ * *NETID*: 16-bit Network Identifier
+ * *ARNCE*: Amateur Radio Numeric Callsign Encoding (HamAddr)
+ * *Coordinator*: A station that assigns TSAs.
+ * *Relay*: A station that will digitally repeat a packet.
+ * *Beacon*: A special transmission that contains information
+             about the sending station.
+ * *ARNGLL*: Amateur Radio Next Generation Link Layer
 
 ## Modes of Operation ##
 
+ARNGLL is designed to support a handful of different modes of communication:
+
 ### Point-to-Point ###
+
+Stations communicate with each other directly.
 
 ### Analog Repeaters ###
 
-### Digital Repeaters ###
+Stations communicate with each other indirectly via the use of
+an analog repeater.
+
+### Digital Relays ###
+
+Stations communicate with each other indirectly using relay
+stations that rebroadcast frames.
 
 ## Future Direction ##
 
@@ -197,18 +214,17 @@ a shorter form using as few as 16-bits.
 
 A link layer packet is arranged like this:
 
-Field        | Description            | Req. |  Octets
--------------|------------------------|------|------------
-`FCF`        | Frame Control Field    | *    | 2
-`NETID`      | Network ID             |      | 0/2
-`DSTADDR`    | Destination Address    | *    | 2/4/6/8
-`SRCADDR`    | Source Address         | *    | 2/4/6/8
-`RLYADDR`    | Relay Address          |      | 0/2/4/6/8
-`SECINFO`    | Security Header        |      | 0/5/6
-`PAYLOAD`    | Payload                |      | n
-`MIC`        | Message Integrity Code |      | 0/4/8/12/16
-`FCS`        | Final Checksum         | *    | 2
-
+| Field     | Description            | Req. | Octets      |
+|-----------|------------------------|------|-------------|
+| `FCF`     | Frame Control Field    | *    | 2           |
+| `NETID`   | Network ID             |      | 0/2         |
+| `DSTADDR` | Destination Address    | *    | 2/4/6/8     |
+| `SRCADDR` | Source Address         | *    | 2/4/6/8     |
+| `RLYADDR` | Relay Address          |      | 0/2/4/6/8   |
+| `SECINFO` | Security Header        |      | 0/5/6       |
+| `PAYLOAD` | Payload                |      | n           |
+| `MIC`     | Message Integrity Code |      | 0/4/8/12/16 |
+| `FCS`     | Final Checksum         | *    | 2           |
 
 ## Frame Control Field
 
@@ -330,6 +346,8 @@ If present, can be 4, 8, or 16 bytes in length.
 
 ## FCS: Final Checksum Field
 
+NOTE: This may change!
+
 The FCS is a 16-bit big-endian value that is calculated over all of
 the preceding bytes[^1] using the following CRC polynomial:
 
@@ -386,16 +404,17 @@ counter from their peers.
 
 The following protocol numbers are defined:
 
- No. | Name               | Reference
-----:|--------------------|------------------
-   0 | *RESERVED*         | —
-   1 | Multi-Protocol     | TBD
-   4 | IPv4/ARP           | RFC791
-   5 | IPv6               | RFC8200
-   6 | AR-6LoWPAN         | RFC4944, RFC6282, RFC6775
-  90 | Experimental Text  | TBD
-  91 | Experimental Voice | TBD
-  92 | Experimental AX.25 | TBD
+| No. | Name               | Reference                 |
+|----:|--------------------|---------------------------|
+|   0 | *RESERVED*         | —                         |
+|   1 | Multi-Protocol     | TBD                       |
+|   4 | IPv4/ARP           | RFC791                    |
+|   5 | IPv6               | RFC8200                   |
+|   6 | AR-6LoWPAN         | RFC4944, RFC6282, RFC6775 |
+|   7 | CoAP-over-ARNGLL   | RFC7252, TBD              |
+|  90 | Experimental Text  | TBD                       |
+|  91 | Experimental Voice | TBD                       |
+|  92 | Experimental AX.25 | TBD                       |
 
 ### Beacon Parameters Format
 
@@ -408,29 +427,34 @@ the associated protocol.
 
 The following field types are defined to be used across all protocols:
 
- No. | Name          | Format | Length | Default
-----:|---------------|--------|--------|-----------
-   0 | *RESERVED*    |        |        |
-   2 | Network-Name  | string | 0-16   | (Empty)
-   4 | PHY-MTU       | uint   | 0-2    | (PHY specific)
-   6 | TSA           | uint   | 0-2    | 000
+| No. | Name         | Format  | Length | Default      |
+|----:|--------------|---------|--------|--------------|
+|   0 | *RESERVED*   |         |        |              |
+|   2 | Caps         | flags   | 1      | 0            |
+|   4 | Network-Name | hamaddr | 0-8    | Empty        |
+|   6 | TSA          | uint    | 0-2    | Unspecified  |
+|   8 | PHY-MTU      | uint    | 0-2    | PHY specific |
 
- *  **Network-Name**: A human-readable, UTF8-encoded string
+* **Caps**: A set of flags describing the capabilities of this station.
+   * Bit 0: Is Relay
+   * Bit 1: Is Coordinator
+   * Bit 2-7: Reserved (set to 0, ignore when set)
+ * **Network-Name**: A human-readable, UTF8-encoded string
     describing the network. 0 to 16 bytes. Default value is empty.
- *  **PHY-MTU**: Maximum Transmissible Unit for Physical Layer. MUST
+ * **PHY-MTU**: Maximum Transmissible Unit for Physical Layer. MUST
     be no less than 127. If not present, assume it is whatever the
     defined default value is for the PHY layer that is in use.
- *  **TSA**: Temporary Short Address of the sender, as defined in
-    section 4.3.2 of ARNCE. 
+ * **TSA**: Temporary Short Address of the sender, as defined in
+    section 4.3.2 of ARNCE. This may be appended by a relay.
 
 For 6LoWPAN-based protocols, the following fields are defined (with all
 other fields being unallocated/reserved):
 
- No. | Name          | Format | Length | Default
-----:|---------------|--------|--------|-----------
-   1 | IPv6-MTU      | uint   | 0-2    | 1280
+| No. | Name     | Format | Length | Default |
+|----:|----------|--------|--------|---------|
+|   1 | IPv6-MTU | uint   | 0-2    | 1280    |
 
- *  **IPv6 MTU**: Effective Maximum Transmissible Unit for IPv6
+*  **IPv6 MTU**: Effective Maximum Transmissible Unit for IPv6
     packets. MUST be no less than 1280. If not present, assume 1280.
 
 ## Data Frames
@@ -460,7 +484,8 @@ will be 0x0.
 
 #### ARP Details
 
-* HTYPE: TBD, See https://www.iana.org/assignments/arp-parameters/arp-parameters.xhtml
+* HTYPE: 0x2201
+  * TODO: Register this value https://www.iana.org/assignments/arp-parameters/arp-parameters.xhtml
 * PTYPE: 0x0800
 * HLEN: 8
 * PLEN: 4 
@@ -502,12 +527,12 @@ acknowledged*, and a final checksum.
 
 A acknowlegement frame is arranged like this:
 
-Field        | Description                | Octets
--------------|----------------------------|-------------
-`FCF_MSB`    | MSB of Frame Control Field | 1
-`SRCADDR`    | Source Address             | 2/4/6/8
-`ACS`        | Acknowlledgment Checksum   | 2
-`FCS`        | Final Checksum             | 2
+| Field     | Description                | Octets  |
+|-----------|----------------------------|---------|
+| `FCF_MSB` | MSB of Frame Control Field | 1       |
+| `SRCADDR` | Source Address             | 2/4/6/8 |
+| `ACS`     | Acknowledgment Checksum    | 2       |
+| `FCS`     | Final Checksum             | 2       |
 
 This packet is designed to be as small as possible. Thus, the second
 byte of the frame control field is omitted entirely, along with the
@@ -538,12 +563,12 @@ The payload format for a MAC command is:
 
 The following commands have been defined:
 
- No. | Name
-----:|----------------
-   0 | (Reserved)
-   1 | Beacon Request
-   2 | Signal Report Request
-   3 | Signal Report Response
+| No. | Name                   |
+|----:|------------------------|
+|   0 | (Reserved)             |
+|   1 | Beacon Request         |
+|   2 | Signal Report Request  |
+|   3 | Signal Report Response |
 
 ### Beacon Request Command
 
@@ -647,11 +672,11 @@ a few key differences:
 
 The security header (`SECINFO`) is defined as:
 
-Field        | Description                | Octets
--------------|----------------------------|-------------
-`SCF`        | Security Control Field     | 1
-`FCNT`       | Frame Counter              | 4
-`KID`        | Key Index                  | 0/1
+| Field  | Description            | Octets |
+|--------|------------------------|--------|
+| `SCF`  | Security Control Field | 1      |
+| `FCNT` | Frame Counter          | 4      |
+| `KID`  | Key Index              | 0/1    |
 
 Where `SCF` is defined as:
 
@@ -740,9 +765,9 @@ The output is "*m* data", which is the plaintext data.
 
 The nonce is defined as follows:
 
-Octets: |       8       |     1     |      4
---------|---------------|-----------|---------------
-Fields: | FULL\_SRCADDR |    SCF    |    FCNT
+| Octets: | 8             | 1   | 4    |
+|---------|---------------|-----|------|
+| Fields: | FULL\_SRCADDR | SCF | FCNT |
 
 Where `FULL_SRCADDR` is `SRCADDR` padded with trailing zeros to 64-bits (8 bytes).
 
