@@ -1,7 +1,7 @@
 Amateur Radio Next Generation Link Layer (ARNGLL)
 =================================================
 
-This is the repository for the [ARNGLL specification](n6drc-arngll.md).
+This is the repository for the [ARNGLL specification](n6drc-arngll.md#introduction).
 
 This project is hosted on GitHub as [arngll/arngll-spec](https://github.com/arngll/arngll-spec).
 
