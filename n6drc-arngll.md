@@ -356,7 +356,7 @@ the preceding bytes[^1] using the following CRC polynomial:
 This CRC is also known as [CRC-16/CCITT-FALSE][FCS]. It is the same CRC
 algorithm used for 802.15.4.
 
-TODO: Consider using HDLC CRC for compatability with existing TNCs?
+TODO: Consider using HDLC CRC for compatibility with existing TNCs?
 
 [FCS]: http://reveng.sourceforge.net/crc-catalogue/16.htm#crc.cat.crc-16-ccitt-false
 [^1]: [ACK packets](#ack-packets) are an exception to this behavior, see below
@@ -372,7 +372,7 @@ There are four different types of frames:
 
 ## Beacon Frames
 
-Beacons are used to announce or confirm the existance of a station,
+Beacons are used to announce or confirm the existence of a station,
 as well as exchange other information such as network association
 information (Like NETID) and higher-level protocol details (like MTU).
 Strictly speaking, the payload of a beacon frame is optional. However,
@@ -478,7 +478,7 @@ type.
 
 Protocol 4 networks are IPv4-only, with the data field containing the
 either a raw IPv4 packet or a raw ARP packet. IPv4 packets are
-differentiated from ARP packets by examining the most-signifiant nibble
+differentiated from ARP packets by examining the most-significant nibble
 of the first data byte: IPv4 packets will be 0x4, whereas ARP packets
 will be 0x0.
 
@@ -498,7 +498,7 @@ specified here for experimental purposes only.
 
 ### Protocol 6: AR-6LoWPAN
 
-Protocol 5 networks are IPv6-only, but encode the packets using a flavor
+Protocol 6 networks are IPv6-only, but encode the packets using a flavor
 of 6LoWPAN optimized for ARNGLL we call AR-6LoWPAN. It has the following
 differences:
 
@@ -521,11 +521,11 @@ Exact timing requirements are TBD.
 Acknowledgement packets are special in that they have a simplified
 frame structure and DO NOT follow the general structure adhered to by
 all other types of frames. Fundamentally, an ACK packet contains only
-two pieces of information: The address of the sender of the
-acknowledgement, checksum of the *original packet which is being
-acknowledged*, and a final checksum.
+three pieces of information: The address of the sender of the
+acknowledgement, checksum of the original packet which is being
+acknowledged, and a final checksum.
 
-A acknowlegement frame is arranged like this:
+An acknowledgement frame is arranged like this:
 
 | Field     | Description                | Octets  |
 |-----------|----------------------------|---------|
@@ -640,7 +640,7 @@ response command is:
  *  **TX Power** (8-bits, signed, dBm): The transmit power of the
     responder. A value of -128 means the transmit power is unknown or
     unsupported. Knowing the transmit power of the responder can
-    allow the requestor to calculate the attenuation of the signal
+    allow the requester to calculate the attenuation of the signal
     path.
 
 There is no MAC-command-specific-payload for a signal report
@@ -894,7 +894,7 @@ average packet length can decrease further to 10 or even 8.
 Turning on security can add between 10 and 30 bytes per packet,
 depending on how the security mode is configured.
 
-The absolute worst-case maximuim packet overhead (assuming
+The absolute worst-case maximum packet overhead (assuming
 12-character callsigns, security, and a non-zero network id) for a
 single unicast packet is 44 bytes:
 
